@@ -110,9 +110,49 @@ async def get_failed_tasks(limit: Optional[int] = 10):
     return await task_queue.get_failed_tasks(limit=limit)
 
 @app.get("/metrics")
+async def prometheus_metrics():
+    """
+    Prometheus metrics endpoint - returns metrics in Prometheus format
+    """
+    # Update metrics with current values
+    try:
+        # Get queue statistics
+        queue_length = await task_queue.get_queue_length()
+        dead_letter_queue_length = await task_queue.get_dead_letter_queue_length()
+        
+        # Get process metrics
+        process = psutil.Process(os.getpid())
+        memory_usage = process.memory_info().rss
+        cpu_percent = process.cpu_percent()
+        
+        # Update Prometheus metrics
+        QUEUE_SIZE.set(queue_length)
+        DEAD_LETTER_QUEUE_SIZE.set(dead_letter_queue_length)
+        WORKER_MEMORY_USAGE.set(memory_usage)
+        WORKER_CPU_LOAD.set(cpu_percent)
+        
+        # Get active workers count from Redis
+        active_workers = await task_queue.get_active_workers_count()
+        ACTIVE_WORKERS.set(active_workers)
+        
+        # Get tasks in progress
+        tasks_in_progress = await task_queue.get_tasks_in_progress_count()
+        TASKS_IN_PROGRESS.set(tasks_in_progress)
+        
+    except Exception as e:
+        # Log the error but still return metrics
+        print(f"Error updating metrics: {e}")
+    
+    # Return Prometheus formatted metrics
+    return Response(
+        content=generate_latest(REGISTRY),
+        media_type=CONTENT_TYPE_LATEST
+    )
+
+@app.get("/metrics/detailed")
 async def detailed_metrics():
     """
-    Get detailed metrics about the task queue and workers
+    Get detailed metrics about the task queue and workers in JSON format
     """
     # Get queue statistics
     queue_length = await task_queue.get_queue_length()
@@ -123,19 +163,11 @@ async def detailed_metrics():
     memory_usage = process.memory_info().rss
     cpu_percent = process.cpu_percent()
     
-    # Update Prometheus metrics
-    QUEUE_SIZE.set(queue_length)
-    DEAD_LETTER_QUEUE_SIZE.set(dead_letter_queue_length)
-    WORKER_MEMORY_USAGE.set(memory_usage)
-    WORKER_CPU_LOAD.set(cpu_percent)
-    
     # Get active workers count from Redis
     active_workers = await task_queue.get_active_workers_count()
-    ACTIVE_WORKERS.set(active_workers)
     
     # Get tasks in progress
     tasks_in_progress = await task_queue.get_tasks_in_progress_count()
-    TASKS_IN_PROGRESS.set(tasks_in_progress)
     
     return {
         "queue_stats": {
@@ -188,10 +220,11 @@ async def root():
             "queue_stats": "/tasks/",
             "failed_tasks": "/tasks/failed/",
             "metrics": "/metrics",
+            "detailed_metrics": "/metrics/detailed",
             "health": "/health"
         }
     })
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    uvicorn.run(app, host="0.0.0.0", port=8000)
