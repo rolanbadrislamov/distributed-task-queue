@@ -1,0 +1,2 @@
+total_requests,successful_requests,failed_requests,avg_latency,p95_latency,p99_latency,min_latency,max_latency,requests_per_second,concurrent_users,duration_seconds
+28368,28368,0,0.056776488207183985,0.10622321367263794,0.16877293586730957,0.0,0.40828871726989746,94.33882844355513,100,300.7033314704895

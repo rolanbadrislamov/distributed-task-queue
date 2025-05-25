@@ -1,9 +1,18 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Optional
+from typing import List, Optional, Dict
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST, Counter, Gauge, REGISTRY, CollectorRegistry
+from fastapi.responses import Response, JSONResponse
 
 from app.core.queue import TaskQueue
 from app.models.task import Task, TaskCreate, TaskResult, TaskStatus
+
+# Initialize Prometheus metrics with a new registry
+REGISTRY = CollectorRegistry()
+REQUESTS = Counter('http_requests_total', 'Total HTTP requests', registry=REGISTRY)
+TASKS_CREATED = Counter('tasks_created_total', 'Total tasks created', registry=REGISTRY)
+QUEUE_SIZE = Gauge('queue_size', 'Current size of task queue', registry=REGISTRY)
+DEAD_LETTER_QUEUE_SIZE = Gauge('dead_letter_queue_size', 'Size of dead letter queue', registry=REGISTRY)
 
 app = FastAPI(
     title="Distributed Task Queue",
@@ -31,6 +40,12 @@ async def startup_event():
 async def shutdown_event():
     await task_queue.disconnect()
 
+@app.middleware("http")
+async def count_requests(request, call_next):
+    REQUESTS.inc()
+    response = await call_next(request)
+    return response
+
 @app.post("/tasks/", response_model=Task)
 async def create_task(task_create: TaskCreate):
     """
@@ -43,6 +58,7 @@ async def create_task(task_create: TaskCreate):
         max_retries=task_create.max_retries
     )
     await task_queue.enqueue_task(task)
+    TASKS_CREATED.inc()
     return task
 
 @app.get("/tasks/{task_id}", response_model=TaskResult)
@@ -69,6 +85,10 @@ async def get_queue_stats():
     queue_length = await task_queue.get_queue_length()
     dead_letter_queue_length = await task_queue.get_dead_letter_queue_length()
     
+    # Update Prometheus metrics
+    QUEUE_SIZE.set(queue_length)
+    DEAD_LETTER_QUEUE_SIZE.set(dead_letter_queue_length)
+    
     return {
         "queue_length": queue_length,
         "dead_letter_queue_length": dead_letter_queue_length
@@ -80,6 +100,55 @@ async def get_failed_tasks(limit: Optional[int] = 10):
     Get a list of failed tasks from the dead letter queue.
     """
     return await task_queue.get_failed_tasks(limit=limit)
+
+@app.get("/metrics")
+async def metrics():
+    """
+    Expose Prometheus metrics
+    """
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+@app.get("/health")
+async def health_check() -> Dict:
+    """
+    Health check endpoint for Docker healthcheck
+    """
+    try:
+        await task_queue.redis.ping()
+        return {
+            "status": "healthy",
+            "redis_connection": "ok",
+            "api_status": "running"
+        }
+    except Exception as e:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "unhealthy",
+                "redis_connection": "failed",
+                "api_status": "running",
+                "error": str(e)
+            }
+        )
+
+@app.get("/")
+async def root():
+    """
+    Root endpoint that provides API information.
+    """
+    return JSONResponse({
+        "name": "Distributed Task Queue API",
+        "version": "1.0.0",
+        "description": "A scalable distributed task queue system",
+        "endpoints": {
+            "tasks": "/tasks/",
+            "task_status": "/tasks/{task_id}",
+            "queue_stats": "/tasks/",
+            "failed_tasks": "/tasks/failed/",
+            "metrics": "/metrics",
+            "health": "/health"
+        }
+    })
 
 if __name__ == "__main__":
     import uvicorn

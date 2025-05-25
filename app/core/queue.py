@@ -1,21 +1,55 @@
 import json
+import os
 from typing import Optional, List
-import redis.asyncio as redis
+import aioredis
 from datetime import datetime
 from app.models.task import Task, TaskStatus, TaskPriority
 
 class TaskQueue:
-    def __init__(self, redis_url: str = "redis://localhost:6379"):
-        self.redis = redis.from_url(redis_url, decode_responses=True)
+    def __init__(self):
+        self.redis = None
         self.task_queue_key = "task_queue"
         self.task_hash_key = "tasks"
         self.dead_letter_queue_key = "dead_letter_queue"
+        
+        # Support multiple Redis URL formats - match your docker-compose env vars
+        redis_host = os.getenv('REDIS_HOST', 'redis')  # Match service name in docker-compose
+        redis_port = os.getenv('REDIS_PORT', '6379')
+        self.redis_url = f'redis://{redis_host}:{redis_port}'
 
     async def connect(self):
-        await self.redis.ping()
+        try:
+            # Try different connection methods based on aioredis version
+            try:
+                # For aioredis 2.x
+                self.redis = aioredis.from_url(
+                    self.redis_url,
+                    encoding='utf-8',
+                    decode_responses=True
+                )
+            except AttributeError:
+                # For older aioredis versions
+                self.redis = await aioredis.create_redis_pool(
+                    self.redis_url,
+                    encoding='utf-8'
+                )
+            
+            # Test the connection
+            await self.redis.ping()
+            print(f"Successfully connected to Redis at {self.redis_url}")
+            
+        except Exception as e:
+            print(f"Failed to connect to Redis at {self.redis_url}: {str(e)}")
+            print("Make sure Redis is running and accessible")
+            raise
 
     async def disconnect(self):
-        await self.redis.close()
+        if self.redis is not None:
+            if hasattr(self.redis, 'close'):
+                await self.redis.close()
+            else:
+                self.redis.close()
+                await self.redis.wait_closed()
 
     async def enqueue_task(self, task: Task) -> str:
         # Store task details
@@ -30,11 +64,19 @@ class TaskQueue:
 
     async def dequeue_task(self) -> Optional[Task]:
         # Get task with highest priority (lowest score)
-        result = await self.redis.zpopmin(self.task_queue_key)
+        result = await self.redis.zpopmin(self.task_queue_key, 1)
         if not result:
             return None
 
-        task_id, _ = result[0]
+        # Handle different aioredis return formats
+        if isinstance(result, list) and result:
+            task_id = result[0][0] if isinstance(result[0][0], str) else result[0][0].decode('utf-8')
+        else:
+            task_id = list(result.keys())[0] if result else None
+            
+        if not task_id:
+            return None
+
         task_data = await self.redis.hget(self.task_hash_key, task_id)
         if not task_data:
             return None
@@ -102,7 +144,8 @@ class TaskQueue:
         task_ids = await self.redis.zrange(self.dead_letter_queue_key, 0, limit - 1)
         tasks = []
         for task_id in task_ids:
-            task_data = await self.redis.hget(self.task_hash_key, task_id)
+            task_id_str = task_id if isinstance(task_id, str) else task_id.decode('utf-8')
+            task_data = await self.redis.hget(self.task_hash_key, task_id_str)
             if task_data:
                 tasks.append(Task.model_validate_json(task_data))
-        return tasks 
+        return tasks
