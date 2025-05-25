@@ -1,0 +1,13 @@
+{
+  "total_requests": 2888,
+  "successful_requests": 2888,
+  "failed_requests": 0,
+  "avg_latency": 0.034546459728330786,
+  "p95_latency": 0.058944666385650636,
+  "p99_latency": 0.06375919342041016,
+  "min_latency": 0.003701448440551758,
+  "max_latency": 0.08789253234863281,
+  "requests_per_second": 9.608433378046593,
+  "concurrent_users": 10,
+  "duration_seconds": 300.5692901611328
+}

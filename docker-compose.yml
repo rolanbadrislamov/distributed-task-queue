@@ -16,6 +16,17 @@ services:
       retries: 3
     command: redis-server --appendonly yes
 
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    networks:
+      - task-queue-network
+    depends_on:
+      - redis
+
   api:
     build:
       context: .
@@ -42,11 +53,11 @@ services:
       context: .
       dockerfile: Dockerfile
     command: python -m app.workers.worker
+    ports:
+      - "8000"
     depends_on:
       redis:
         condition: service_healthy
-      # api:
-      #   condition: service_healthy
     deploy:
       replicas: 3
     environment:

@@ -11,6 +11,8 @@ class TaskQueue:
         self.task_queue_key = "task_queue"
         self.task_hash_key = "tasks"
         self.dead_letter_queue_key = "dead_letter_queue"
+        self.active_workers_key = "active_workers"
+        self.tasks_in_progress_key = "tasks_in_progress"
         
         # Support multiple Redis URL formats - match your docker-compose env vars
         redis_host = os.getenv('REDIS_HOST', 'redis')  # Match service name in docker-compose
@@ -84,6 +86,9 @@ class TaskQueue:
         task = Task.model_validate_json(task_data)
         task.status = TaskStatus.RUNNING
         task.started_at = datetime.utcnow()
+        
+        # Add task to in-progress set
+        await self.redis.sadd(self.tasks_in_progress_key, task_id)
         await self.update_task(task)
         
         return task
@@ -94,6 +99,9 @@ class TaskQueue:
         await self.redis.hset(self.task_hash_key, task.id, task_data)
 
     async def complete_task(self, task_id: str, result: any = None):
+        # Remove task from in-progress set
+        await self.redis.srem(self.tasks_in_progress_key, task_id)
+        
         task_data = await self.redis.hget(self.task_hash_key, task_id)
         if not task_data:
             return None
@@ -106,6 +114,9 @@ class TaskQueue:
         return task
 
     async def fail_task(self, task_id: str, error: str):
+        # Remove task from in-progress set
+        await self.redis.srem(self.tasks_in_progress_key, task_id)
+        
         task_data = await self.redis.hget(self.task_hash_key, task_id)
         if not task_data:
             return None
@@ -149,3 +160,24 @@ class TaskQueue:
             if task_data:
                 tasks.append(Task.model_validate_json(task_data))
         return tasks
+
+    async def get_active_workers_count(self) -> int:
+        """Get the number of active workers"""
+        # Clean up stale workers (older than 30 seconds)
+        current_time = datetime.utcnow().timestamp()
+        await self.redis.zremrangebyscore(self.active_workers_key, 0, current_time - 30)
+        return await self.redis.zcard(self.active_workers_key)
+
+    async def get_tasks_in_progress_count(self) -> int:
+        """Get the number of tasks currently being processed"""
+        return await self.redis.scard(self.tasks_in_progress_key)
+
+    async def register_worker(self, worker_id: str):
+        """Register a worker as active"""
+        current_time = datetime.utcnow().timestamp()
+        await self.redis.zadd(self.active_workers_key, {worker_id: current_time})
+
+    async def update_worker_heartbeat(self, worker_id: str):
+        """Update worker heartbeat timestamp"""
+        current_time = datetime.utcnow().timestamp()
+        await self.redis.zadd(self.active_workers_key, {worker_id: current_time})
