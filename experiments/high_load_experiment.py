@@ -55,13 +55,7 @@ class ExperimentRunner:
         while time.time() < end_time:
             start_request = time.time()
             try:
-                if pattern == "fibonacci":
-                    response = await self._submit_fibonacci_task(session)
-                elif pattern == "matrix":
-                    response = await self._submit_matrix_task(session)
-                else:
-                    raise ValueError(f"Unknown pattern: {pattern}")
-
+                response = await self._submit_fibonacci_task(session)
                 results.append({
                     "latency": time.time() - start_request,
                     "status": response.status,
@@ -76,23 +70,13 @@ class ExperimentRunner:
                     "error": str(e)
                 })
 
+            await asyncio.sleep(1)  # Rate limiting
 
     async def _submit_fibonacci_task(self, session: aiohttp.ClientSession) -> aiohttp.ClientResponse:
         """Submit a Fibonacci calculation task"""
         payload = {
             "task_type": "fibonacci",
-            "payload": {"n": 30},
-            "priority": 1
-        }
-        async with session.post(f"{self.base_url}/tasks/", json=payload) as response:
-            await response.json()
-            return response
-
-    async def _submit_matrix_task(self, session: aiohttp.ClientSession) -> aiohttp.ClientResponse:
-        """Submit a matrix multiplication task"""
-        payload = {
-            "task_type": "matrix_multiplication",
-            "payload": {"size": 100},
+            "payload": {"n": 35},  # Increased complexity for high load test
             "priority": 1
         }
         async with session.post(f"{self.base_url}/tasks/", json=payload) as response:
@@ -140,25 +124,25 @@ class ExperimentRunner:
             writer.writerow(results)
 
 async def main():
-    # Example experiment configurations
-    experiments = [
-        {"name": "baseline", "users": 10, "duration": 300, "pattern": "fibonacci"},
-        {"name": "high_load", "users": 50, "duration": 300, "pattern": "fibonacci"},
-        {"name": "stress_test", "users": 100, "duration": 300, "pattern": "matrix"}
-    ]
+    # High load experiment configuration
+    experiment = {
+        "name": "high_load",
+        "users": 50,
+        "duration": 300,
+        "pattern": "fibonacci"
+    }
 
     runner = ExperimentRunner()
-
-    for exp in experiments:
-        logger.info(f"Running experiment: {exp['name']}")
-        results = await runner.run_load_test(
-            concurrent_users=exp["users"],
-            duration_seconds=exp["duration"],
-            request_pattern=exp["pattern"]
-        )
-        runner.save_results(results, exp["name"])
-        logger.info(f"Completed experiment: {exp['name']}")
-        logger.info(f"Results: {json.dumps(results, indent=2)}")
+    
+    logger.info(f"Running high load experiment with {experiment['users']} users")
+    results = await runner.run_load_test(
+        concurrent_users=experiment["users"],
+        duration_seconds=experiment["duration"],
+        request_pattern=experiment["pattern"]
+    )
+    runner.save_results(results, experiment["name"])
+    logger.info(f"Completed high load experiment")
+    logger.info(f"Results: {json.dumps(results, indent=2)}")
 
 if __name__ == "__main__":
     asyncio.run(main()) 

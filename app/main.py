@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional, Dict
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST, Counter, Gauge, REGISTRY, CollectorRegistry
 from fastapi.responses import Response, JSONResponse
+import psutil
+import os
 
 from app.core.queue import TaskQueue
 from app.models.task import Task, TaskCreate, TaskResult, TaskStatus
@@ -13,6 +15,12 @@ REQUESTS = Counter('http_requests_total', 'Total HTTP requests', registry=REGIST
 TASKS_CREATED = Counter('tasks_created_total', 'Total tasks created', registry=REGISTRY)
 QUEUE_SIZE = Gauge('queue_size', 'Current size of task queue', registry=REGISTRY)
 DEAD_LETTER_QUEUE_SIZE = Gauge('dead_letter_queue_size', 'Size of dead letter queue', registry=REGISTRY)
+
+# New metrics for worker stats
+ACTIVE_WORKERS = Gauge('active_workers', 'Number of active workers', registry=REGISTRY)
+WORKER_MEMORY_USAGE = Gauge('worker_memory_usage_bytes', 'Worker memory usage in bytes', registry=REGISTRY)
+WORKER_CPU_LOAD = Gauge('worker_cpu_load_percent', 'Worker CPU load percentage', registry=REGISTRY)
+TASKS_IN_PROGRESS = Gauge('tasks_in_progress', 'Number of tasks currently being processed', registry=REGISTRY)
 
 app = FastAPI(
     title="Distributed Task Queue",
@@ -102,11 +110,77 @@ async def get_failed_tasks(limit: Optional[int] = 10):
     return await task_queue.get_failed_tasks(limit=limit)
 
 @app.get("/metrics")
-async def metrics():
+async def prometheus_metrics():
     """
-    Expose Prometheus metrics
+    Prometheus metrics endpoint - returns metrics in Prometheus format
     """
-    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+    # Update metrics with current values
+    try:
+        # Get queue statistics
+        queue_length = await task_queue.get_queue_length()
+        dead_letter_queue_length = await task_queue.get_dead_letter_queue_length()
+        
+        # Get process metrics
+        process = psutil.Process(os.getpid())
+        memory_usage = process.memory_info().rss
+        cpu_percent = process.cpu_percent()
+        
+        # Update Prometheus metrics
+        QUEUE_SIZE.set(queue_length)
+        DEAD_LETTER_QUEUE_SIZE.set(dead_letter_queue_length)
+        WORKER_MEMORY_USAGE.set(memory_usage)
+        WORKER_CPU_LOAD.set(cpu_percent)
+        
+        # Get active workers count from Redis
+        active_workers = await task_queue.get_active_workers_count()
+        ACTIVE_WORKERS.set(active_workers)
+        
+        # Get tasks in progress
+        tasks_in_progress = await task_queue.get_tasks_in_progress_count()
+        TASKS_IN_PROGRESS.set(tasks_in_progress)
+        
+    except Exception as e:
+        # Log the error but still return metrics
+        print(f"Error updating metrics: {e}")
+    
+    # Return Prometheus formatted metrics
+    return Response(
+        content=generate_latest(REGISTRY),
+        media_type=CONTENT_TYPE_LATEST
+    )
+
+@app.get("/metrics/detailed")
+async def detailed_metrics():
+    """
+    Get detailed metrics about the task queue and workers in JSON format
+    """
+    # Get queue statistics
+    queue_length = await task_queue.get_queue_length()
+    dead_letter_queue_length = await task_queue.get_dead_letter_queue_length()
+    
+    # Get process metrics
+    process = psutil.Process(os.getpid())
+    memory_usage = process.memory_info().rss
+    cpu_percent = process.cpu_percent()
+    
+    # Get active workers count from Redis
+    active_workers = await task_queue.get_active_workers_count()
+    
+    # Get tasks in progress
+    tasks_in_progress = await task_queue.get_tasks_in_progress_count()
+    
+    return {
+        "queue_stats": {
+            "queue_length": queue_length,
+            "dead_letter_queue_length": dead_letter_queue_length,
+            "tasks_in_progress": tasks_in_progress
+        },
+        "worker_stats": {
+            "active_workers": active_workers,
+            "memory_usage_bytes": memory_usage,
+            "cpu_load_percent": cpu_percent
+        }
+    }
 
 @app.get("/health")
 async def health_check() -> Dict:
@@ -146,10 +220,11 @@ async def root():
             "queue_stats": "/tasks/",
             "failed_tasks": "/tasks/failed/",
             "metrics": "/metrics",
+            "detailed_metrics": "/metrics/detailed",
             "health": "/health"
         }
     })
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    uvicorn.run(app, host="0.0.0.0", port=8000)
