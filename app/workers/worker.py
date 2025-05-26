@@ -5,6 +5,7 @@ import sys
 import uuid
 import os
 import psutil
+import time
 from typing import Dict, Callable, Any, Coroutine
 from datetime import datetime
 from fastapi import FastAPI
@@ -13,7 +14,6 @@ from fastapi.responses import Response
 
 from app.core.queue import TaskQueue
 from app.models.task import Task, TaskStatus
-from app.workers.example_tasks import register_example_handlers
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -36,6 +36,9 @@ class Worker:
         self.worker_id = os.getenv('WORKER_ID', str(uuid.uuid4()))
         self._setup_signal_handlers()
         self.process = psutil.Process()
+        self.last_task_time = time.time()
+        self.consecutive_empty_polls = 0
+        self.max_batch_size = 10
 
     def _setup_signal_handlers(self):
         for sig in (signal.SIGINT, signal.SIGTERM):
@@ -98,25 +101,43 @@ class Worker:
             TASKS_FAILED.inc()
             await self.queue.fail_task(task.id, error_msg)
 
-    async def run(self, poll_interval: float = 1.0):
-        """Main worker loop"""
+    async def run(self, initial_poll_interval: float = 1.0):
+        """Main worker loop with adaptive polling"""
         logger.info(f"Starting worker {self.worker_id}...")
         await self.queue.connect()
         self.running = True
 
-        # Register worker and start heartbeat and metrics
+        # Register worker and start background tasks
         await self.queue.register_worker(self.worker_id)
         heartbeat_task = asyncio.create_task(self.send_heartbeat())
         metrics_task = asyncio.create_task(self.update_metrics())
 
         try:
+            poll_interval = initial_poll_interval
             while self.running:
                 try:
-                    task = await self.queue.dequeue_task()
-                    if task:
-                        await self.process_task(task)
+                    # Try to get a batch of tasks
+                    tasks = []
+                    for _ in range(self.max_batch_size):
+                        task = await self.queue.dequeue_task()
+                        if task:
+                            tasks.append(task)
+                        else:
+                            break
+
+                    if tasks:
+                        # Process tasks concurrently
+                        await asyncio.gather(*[self.process_task(task) for task in tasks])
+                        self.consecutive_empty_polls = 0
+                        self.last_task_time = time.time()
+                        poll_interval = initial_poll_interval
                     else:
+                        # Adaptive polling interval
+                        self.consecutive_empty_polls += 1
+                        if self.consecutive_empty_polls > 5:
+                            poll_interval = min(poll_interval * 1.5, 5.0)  # Max 5 second interval
                         await asyncio.sleep(poll_interval)
+
                 except Exception as e:
                     logger.error(f"Error in worker loop: {str(e)}")
                     await asyncio.sleep(poll_interval)
@@ -150,7 +171,6 @@ async def startup_event():
     global worker
     queue = TaskQueue()
     worker = Worker(queue)
-    register_example_handlers(worker)
     asyncio.create_task(worker.run())
 
 @app.on_event("shutdown")
@@ -161,4 +181,4 @@ async def shutdown_event():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    uvicorn.run(app, host="0.0.0.0", port=8000)

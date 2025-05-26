@@ -9,7 +9,18 @@ scrape_configs:
 
   - job_name: 'task-queue-workers'
     static_configs:
-      - targets: ['worker:8000']
+      - targets: 
+          - 'distributed-task-queue-worker-1:8000'
+          - 'distributed-task-queue-worker-2:8000'
+          - 'distributed-task-queue-worker-3:8000'
+          - 'distributed-task-queue-worker-4:8000'
+          - 'distributed-task-queue-worker-5:8000'
+          - 'distributed-task-queue-worker-6:8000'
+          - 'distributed-task-queue-worker-7:8000'
+          - 'distributed-task-queue-worker-8:8000'
+          - 'distributed-task-queue-worker-9:8000'
+          - 'distributed-task-queue-worker-10:8000'
+
 
   - job_name: 'redis'
     static_configs:
