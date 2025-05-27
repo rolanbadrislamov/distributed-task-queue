@@ -1,0 +1,41 @@
+[
+  {
+    "worker_count": 3,
+    "total_tasks_submitted": 7902,
+    "successful_submissions": 7902,
+    "failed_submissions": 0,
+    "actual_completed_tasks": 750,
+    "tasks_completed_per_second": 37.03248769293199,
+    "tasks_submitted_per_second": 390.1742903327314,
+    "concurrent_users": 50,
+    "duration_seconds": 20.252487659454346,
+    "tasks_completed_per_worker": {},
+    "task_completion_rate": 0.09491268033409264
+  },
+  {
+    "worker_count": 4,
+    "total_tasks_submitted": 8600,
+    "successful_submissions": 8600,
+    "failed_submissions": 0,
+    "actual_completed_tasks": 1060,
+    "tasks_completed_per_second": 52.379304028415035,
+    "tasks_submitted_per_second": 424.964164758839,
+    "concurrent_users": 50,
+    "duration_seconds": 20.237000465393066,
+    "tasks_completed_per_worker": {},
+    "task_completion_rate": 0.12325581395348838
+  },
+  {
+    "worker_count": 8,
+    "total_tasks_submitted": 8150,
+    "successful_submissions": 8150,
+    "failed_submissions": 0,
+    "actual_completed_tasks": 2090,
+    "tasks_completed_per_second": 103.05094558323879,
+    "tasks_submitted_per_second": 401.8493811021034,
+    "concurrent_users": 50,
+    "duration_seconds": 20.281230688095093,
+    "tasks_completed_per_worker": {},
+    "task_completion_rate": 0.25644171779141106
+  }
+]

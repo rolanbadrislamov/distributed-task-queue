@@ -4,7 +4,6 @@ import time
 import json
 import csv
 from datetime import datetime
-import statistics
 import os
 import subprocess
 from typing import List, Dict, Optional
@@ -179,7 +178,7 @@ class WorkerScalingExperiment:
         """Submit a matrix multiplication task"""
         payload = {
             "task_type": "matrix_multiply",
-            "payload": {"size": 750},
+            "payload": {"size": 10},
             "priority": 1,
             "max_retries": 3
         }
