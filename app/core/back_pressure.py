@@ -15,10 +15,10 @@ class SystemMetrics:
 class BackPressure:
     def __init__(
         self,
-        max_queue_size: int = 1000,
-        max_worker_load: float = 0.9,
-        max_memory_usage: float = 0.85,
-        cooldown_period: int = 60
+        max_queue_size: int = 5000,
+        max_worker_load: float = 0.98,
+        max_memory_usage: float = 0.98,
+        cooldown_period: int = 10
     ):
         self.max_queue_size = max_queue_size
         self.max_worker_load = max_worker_load
@@ -46,8 +46,8 @@ class BackPressure:
         # Use the highest load factor to determine delay
         load_factor = max(queue_factor, worker_factor, memory_factor)
         
-        # Exponential backoff with maximum delay of 30 seconds
-        return min(2 ** (load_factor * 3), 30)
+        # Less aggressive backoff: max 2.5s, starting lower
+        return min(0.5 + load_factor, 2.5)
 
     async def apply_back_pressure(self, metrics: SystemMetrics) -> Optional[float]:
         """Apply back pressure if needed"""

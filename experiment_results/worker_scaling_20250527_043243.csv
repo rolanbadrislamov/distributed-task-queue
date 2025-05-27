@@ -1,0 +1,4 @@
+worker_count,total_tasks_submitted,successful_submissions,failed_submissions,actual_completed_tasks,tasks_completed_per_second,tasks_submitted_per_second,concurrent_users,duration_seconds,tasks_completed_per_worker,task_completion_rate
+1,7869,7869,0,0,0.0,391.4425557343467,50,20.102566480636597,{},0.0
+4,6894,6894,0,0,0.0,341.0448279170635,50,20.214351415634155,{},0.0
+8,5550,5550,0,0,0.0,274.6286979242755,50,20.209104299545288,{},0.0

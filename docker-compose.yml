@@ -14,7 +14,19 @@ services:
       interval: 5s
       timeout: 3s
       retries: 3
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --maxclients 10000
+    ulimits:
+      nofile:
+        soft: 10000
+        hard: 20000
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
 
   redis-exporter:
     image: oliver006/redis_exporter:latest
@@ -42,6 +54,14 @@ services:
       - WORKERS_COUNT=3
     networks:
       - task-queue-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1G
+        reservations:
+          cpus: '0.75'
+          memory: 512M
     # healthcheck:
     #   test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
     #   interval: 30s
@@ -58,8 +78,6 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    deploy:
-      replicas: 3
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379

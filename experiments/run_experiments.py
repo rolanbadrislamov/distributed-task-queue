@@ -161,4 +161,4 @@ async def main():
         logger.info(f"Results: {json.dumps(results, indent=2)}")
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    asyncio.run(main())
