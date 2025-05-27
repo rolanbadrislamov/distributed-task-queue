@@ -6,6 +6,7 @@ import uuid
 import os
 import psutil
 import time
+import concurrent.futures
 from typing import Dict, Callable, Any, Coroutine
 from datetime import datetime
 from fastapi import FastAPI
@@ -14,6 +15,7 @@ from fastapi.responses import Response
 
 from app.core.queue import TaskQueue
 from app.models.task import Task, TaskStatus
+from app.workers.task_handlers import fibonacci_handler, matrix_multiply_handler, sleep_handler
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -27,6 +29,8 @@ TASKS_PROCESSED = Counter('tasks_processed_total', 'Total tasks processed', regi
 TASKS_FAILED = Counter('tasks_failed_total', 'Total tasks failed', registry=REGISTRY)
 WORKER_CPU_USAGE = Gauge('worker_cpu_usage_percent', 'Worker CPU usage percentage', registry=REGISTRY)
 WORKER_MEMORY_USAGE = Gauge('worker_memory_usage_bytes', 'Worker memory usage in bytes', registry=REGISTRY)
+COMPLETED_TASKS_COUNTER = Counter('completed_tasks_total', 'Total number of completed tasks', registry=REGISTRY)
+WORKER_OBJECT_COMPLETED_TASKS = Gauge('worker_object_completed_tasks', 'Gauge: Total tasks completed by the worker object instance', registry=REGISTRY)
 
 class Worker:
     def __init__(self, queue: TaskQueue):
@@ -39,6 +43,8 @@ class Worker:
         self.last_task_time = time.time()
         self.consecutive_empty_polls = 0
         self.max_batch_size = 10
+        self.max_cpu_threshold = 90.0  # percent
+        self.total_completed_tasks = 0  # Track total completed tasks
 
     def _setup_signal_handlers(self):
         for sig in (signal.SIGINT, signal.SIGTERM):
@@ -57,6 +63,7 @@ class Worker:
                 
                 WORKER_CPU_USAGE.set(cpu_percent)
                 WORKER_MEMORY_USAGE.set(memory_info.rss)
+                WORKER_OBJECT_COMPLETED_TASKS.set(self.total_completed_tasks) # Add this line
                 
                 await asyncio.sleep(5)
             except Exception as e:
@@ -91,10 +98,13 @@ class Worker:
             return
 
         try:
+            # CPU overload check is now part of the main run loop to prevent fetching new tasks
             result = await handler(task.payload)
             await self.queue.complete_task(task.id, result)
             TASKS_PROCESSED.inc()
-            logger.info(f"Task {task.id} completed successfully")
+            COMPLETED_TASKS_COUNTER.inc()
+            self.total_completed_tasks += 1
+            logger.info(f"Task {task.id} completed successfully (Total completed: {self.total_completed_tasks})")
         except Exception as e:
             error_msg = f"Task failed: {str(e)}"
             logger.error(error_msg)
@@ -116,6 +126,13 @@ class Worker:
             poll_interval = initial_poll_interval
             while self.running:
                 try:
+                    # Check CPU load before attempting to dequeue tasks
+                    cpu_percent = self.process.cpu_percent(interval=None)
+                    if cpu_percent > self.max_cpu_threshold:
+                        logger.warning(f"Worker {self.worker_id} CPU high ({cpu_percent}%), pausing task fetching for 1 second.")
+                        await asyncio.sleep(1.0) # Pause before trying to fetch new tasks
+                        continue # Skip to next iteration to re-check CPU and conditions
+
                     # Try to get a batch of tasks
                     tasks = []
                     for _ in range(self.max_batch_size):
@@ -171,6 +188,9 @@ async def startup_event():
     global worker
     queue = TaskQueue()
     worker = Worker(queue)
+    worker.register_task_handler('fibonacci', fibonacci_handler)
+    worker.register_task_handler('matrix_multiply', matrix_multiply_handler)
+    worker.register_task_handler('sleep', sleep_handler)
     asyncio.create_task(worker.run())
 
 @app.on_event("shutdown")

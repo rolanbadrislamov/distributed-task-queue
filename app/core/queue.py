@@ -1,9 +1,13 @@
 import json
 import os
+import logging
 from typing import Optional, List
-import aioredis
+import redis.asyncio as aioredis
 from datetime import datetime
 from app.models.task import Task, TaskStatus, TaskPriority
+import asyncio
+
+logger = logging.getLogger(__name__)
 
 class TaskQueue:
     _redis_pool = None  # Class level connection pool
@@ -20,58 +24,119 @@ class TaskQueue:
     async def create_pool(cls):
         """Create a Redis connection pool if it doesn't exist"""
         if cls._redis_pool is None:
-            redis_url = os.getenv("REDIS_URL", "redis://localhost")
-            cls._redis_pool = await aioredis.create_redis_pool(
-                redis_url,
-                minsize=10,
-                maxsize=50,
-                encoding='utf-8'
-            )
+            redis_host = os.getenv("REDIS_HOST", "redis")
+            redis_port = os.getenv("REDIS_PORT", "6379")
+            redis_url = os.getenv("REDIS_URL", f"redis://{redis_host}:{redis_port}")
+            max_retries = 5
+            for attempt in range(max_retries):
+                try:
+                    cls._redis_pool = await aioredis.from_url(
+                        redis_url,
+                        encoding='utf-8',
+                        decode_responses=True,
+                        max_connections=250
+                    )
+                    # Test connection
+                    await cls._redis_pool.ping()
+                    break
+                except Exception as e:
+                    if attempt == max_retries - 1:
+                        raise
+                    await asyncio.sleep(2 ** attempt)
 
     async def connect(self):
-        """Get a connection from the pool"""
         await self.__class__.create_pool()
         if not self.redis:
             self.redis = self._redis_pool
+            # Health check
+            for _ in range(3):
+                try:
+                    await self.redis.ping()
+                    break
+                except Exception:
+                    await asyncio.sleep(1)
 
     async def disconnect(self):
         """Return connection to pool"""
         self.redis = None
 
-    async def enqueue_task(self, task: Task) -> str:
-        # Store task details
-        task_data = task.model_dump_json()
-        await self.redis.hset(self.task_storage_key, task.id, task_data)
+    _enqueue_lua = """
+    -- KEYS[1]: task_storage_key
+    -- KEYS[2]: task_queue_key
+    -- ARGV[1]: task.id
+    -- ARGV[2]: task_data (JSON string)
+    -- ARGV[3]: score (for the sorted set)
 
-        # Add to priority queue with score based on priority and timestamp
+    redis.call('HSET', KEYS[1], ARGV[1], ARGV[2])
+    redis.call('ZADD', KEYS[2], ARGV[3], ARGV[1])
+    return ARGV[1]
+    """
+
+    async def enqueue_task(self, task: Task) -> str:
+        task_data = task.model_dump_json()
         score = datetime.utcnow().timestamp() + (task.priority.value * 1000)
-        await self.redis.zadd(self.task_queue_key, {task.id: score})
         
-        return task.id
+        try:
+            task_id = await self.redis.eval(
+                self._enqueue_lua,
+                2,
+                self.task_storage_key,
+                self.task_queue_key,
+                task.id,
+                task_data,
+                score
+            )
+            return task_id
+        except aioredis.exceptions.ResponseError as e:
+            logger.error(f"Lua script error or Redis connection issue during enqueue: {str(e)}")
+            # Fallback or re-raise, depending on desired error handling
+            raise
+        except Exception as e:
+            logger.error(f"Error enqueuing task: {str(e)}")
+            raise
+
+    # Atomic Lua script for dequeueing and marking in-progress
+    _dequeue_lua = """
+    local task_id = redis.call('zpopmin', KEYS[1])
+    if not task_id[1] then return nil end
+    
+    local task_data = redis.call('hget', KEYS[3], task_id[1])
+    if not task_data then
+        -- Task data not found, potentially an orphaned ID. Remove from in-progress if added.
+        -- This case should be rare if enqueue and storage are consistent.
+        return nil 
+    end
+    
+    redis.call('sadd', KEYS[2], task_id[1])
+    return {task_id[1], task_data}
+    """
 
     async def dequeue_task(self) -> Optional[Task]:
-        """Dequeue a task with optimized locking"""
         try:
-            # Use Redis transaction to ensure atomic operations
-            tr = self.redis.multi_exec()
-            # Get task ID from queue
-            tr.rpop(self.task_queue_key)
-            task_id = await tr.execute()
+            # EVALSHA can be used if the script is loaded once with SCRIPT LOAD
+            # For simplicity, using EVAL directly here.
+            result = await self.redis.eval(
+                self._dequeue_lua, 
+                3, 
+                self.task_queue_key, 
+                self.tasks_in_progress_key,
+                self.task_storage_key
+            )
+            if not result:
+                return None
             
-            if not task_id or not task_id[0]:
-                return None
-                
-            task_id = task_id[0]
-            # Get task data
-            task_data = await self.redis.hget(self.task_storage_key, task_id)
-            if not task_data:
+            task_id, task_data_str = result
+            if not task_data_str: # Should be caught by Lua, but as a safeguard
+                logger.warning(f"Dequeued task ID {task_id} but no data found in storage.")
+                await self.redis.srem(self.tasks_in_progress_key, task_id) # Clean up
                 return None
 
-            task = Task.parse_raw(task_data)
-            # Mark task as in progress
-            await self.redis.sadd(self.tasks_in_progress_key, task_id)
+            task = Task.model_validate_json(task_data_str)
             return task
-
+        except aioredis.exceptions.ResponseError as e:
+            # Handle potential script errors or connection issues
+            logger.error(f"Lua script error or Redis connection issue during dequeue: {str(e)}")
+            return None
         except Exception as e:
             logger.error(f"Error dequeuing task: {str(e)}")
             return None

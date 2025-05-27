@@ -149,39 +149,6 @@ async def prometheus_metrics():
         media_type=CONTENT_TYPE_LATEST
     )
 
-@app.get("/metrics/detailed")
-async def detailed_metrics():
-    """
-    Get detailed metrics about the task queue and workers in JSON format
-    """
-    # Get queue statistics
-    queue_length = await task_queue.get_queue_length()
-    dead_letter_queue_length = await task_queue.get_dead_letter_queue_length()
-    
-    # Get process metrics
-    process = psutil.Process(os.getpid())
-    memory_usage = process.memory_info().rss
-    cpu_percent = process.cpu_percent()
-    
-    # Get active workers count from Redis
-    active_workers = await task_queue.get_active_workers_count()
-    
-    # Get tasks in progress
-    tasks_in_progress = await task_queue.get_tasks_in_progress_count()
-    
-    return {
-        "queue_stats": {
-            "queue_length": queue_length,
-            "dead_letter_queue_length": dead_letter_queue_length,
-            "tasks_in_progress": tasks_in_progress
-        },
-        "worker_stats": {
-            "active_workers": active_workers,
-            "memory_usage_bytes": memory_usage,
-            "cpu_load_percent": cpu_percent
-        }
-    }
-
 @app.get("/health")
 async def health_check() -> Dict:
     """
@@ -220,7 +187,6 @@ async def root():
             "queue_stats": "/tasks/",
             "failed_tasks": "/tasks/failed/",
             "metrics": "/metrics",
-            "detailed_metrics": "/metrics/detailed",
             "health": "/health"
         }
     })
