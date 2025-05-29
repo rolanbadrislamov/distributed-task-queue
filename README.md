@@ -1,61 +1,73 @@
 # Distributed Task Queue System
 
-This project implements a distributed task queue system using FastAPI and Redis, demonstrating practical approaches to scalability in distributed systems. It's designed as part of a bachelor's thesis to showcase distributed system concepts without relying on existing task queue solutions like Celery.
+This project implements a distributed task queue system using FastAPI and Redis. It serves as a practical demonstration of distributed system concepts, focusing on scalability, fault tolerance, and real-time monitoring, developed as part of a bachelor's thesis. The system is built from fundamental components to illustrate these concepts without relying on off-the-shelf solutions like Celery.
 
-## Architecture
+## Core Objectives
+- To design and implement a scalable task processing system.
+- To explore and implement mechanisms for fault tolerance (e.g., task retries).
+- To integrate real-time monitoring for system performance and health.
+- To demonstrate dynamic worker scaling and its impact on system throughput.
 
-The system consists of the following components:
+## System Architecture
 
-1. **Task Queue API**: FastAPI-based REST API for task submission and management
-2. **Task Workers**: Distributed workers that process tasks from the queue
-3. **Redis Backend**: For task storage, distribution, and state management
-4. **Result Backend**: For storing task results and status
-5. **Monitoring Stack**: Prometheus and Grafana for real-time metrics
-6. **Partition Handler**: For managing network partitions and split-brain scenarios
+The system comprises the following key components:
 
-## Features
+1.  **Task Queue API**: A FastAPI-based RESTful service for submitting tasks, checking task status, and retrieving results.
+2.  **Task Workers**: Independent worker processes that fetch tasks from the queue, execute them, and report results. These are designed to be horizontally scalable.
+3.  **Redis Backend**: Utilized as a message broker for the task queue, managing task distribution and persistence. It also serves for storing intermediate task states.
+4.  **Monitoring Stack**: Prometheus for metrics collection and Grafana for visualization, providing insights into system behavior and performance.
 
-### Core Features
-- Distributed task processing
-- Horizontal scalability
-- Fault tolerance and task recovery
-- Real-time task status monitoring
-- Priority queue support
-- Task result storage and retrieval
-- Dead letter queue for failed tasks
-- Task retries with backoff
+## Key Features
 
-### Advanced Scalability Features
-- Circuit Breaker pattern for failure isolation
-- Back Pressure mechanism for load management
-- Partition tolerance with automatic recovery
-- Real-time metrics collection and visualization
-- Dynamic worker scaling
-- Comprehensive system monitoring
+### Implemented Features
+-   **Distributed Task Processing**: Tasks are distributed among multiple worker instances.
+-   **Horizontal Worker Scaling**: Workers can be scaled dynamically (e.g., using Docker Compose) to handle varying loads.
+-   **Task Submission API**: Endpoints for creating and managing tasks.
+-   **Basic Fault Tolerance**: Includes task retries on failure.
+-   **Real-time Metrics Collection**: Prometheus scrapes metrics from the API and workers.
+-   **Monitoring Dashboards**: Grafana dashboards to visualize key performance indicators.
+-   **Experimentation Framework**: Scripts to run and analyze performance under different configurations (e.g., varying number of workers).
 
-## Project Structure
+### Explored Concepts (may require further development for production readiness)
+-   **Circuit Breaker Pattern**: `app/core/circuit_breaker.py` provides an implementation to prevent cascading failures.
+-   **Back Pressure Mechanism**: `app/core/back_pressure.py` includes logic for managing system load.
+-   **Partition Handling**: `app/core/partition_handler.py` explores concepts for dealing with network partitions.
 
 ```
 distributed-task-queue/
 ├── app/
-│   ├── api/              # FastAPI routes and endpoints
-│   ├── core/             # Core task queue implementation
-│   │   ├── circuit_breaker.py    # Circuit breaker pattern
-│   │   ├── back_pressure.py      # Back pressure mechanism
-│   │   ├── partition_handler.py  # Network partition handling
-│   │   └── metrics_collector.py  # System metrics collection
-│   ├── models/           # Pydantic models
+│   ├── main.py           # FastAPI application entry point, API routes
+│   ├── api/              # API specific logic (if separated from main.py)
+│   ├── core/             # Core logic: queue, metrics, patterns
+│   │   ├── back_pressure.py
+│   │   ├── circuit_breaker.py
+│   │   ├── metrics_collector.py
+│   │   ├── partition_handler.py
+│   │   └── queue.py
+│   ├── models/           # Pydantic models for tasks and API requests/responses
+│   │   └── task.py
 │   └── workers/          # Task worker implementation
+│       ├── task_handlers.py # Logic for specific task types
+│       └── worker.py        # Main worker process
+├── experiments/          # Scripts for performance experiments
+│   ├── baseline_experiment.py
+│   ├── high_load_experiment.py
+│   ├── run_experiments.py
+│   ├── stress_test_experiment.py
+│   └── worker_scaling_experiment.py
+├── experiment_results/   # Directory for storing results from experiments
 ├── monitoring/
-│   ├── grafana/         # Grafana dashboards
-│   └── prometheus/      # Prometheus configuration
-├── experiments/         # Load testing and experiments
-│   ├── load_testing/   # Load test scenarios
-│   └── results/        # Test results and analysis
-├── tests/              # Test cases
+│   ├── grafana/          # Grafana configuration and dashboards
+│   │   ├── dashboards/
+│   │   │   ├── default.yml
+│   │   │   └── task_queue_metrics.json
+│   │   └── provisioning/
+│   └── prometheus.yml      # Prometheus configuration file
 ├── docker-compose.yml  # Docker composition
+├── Dockerfile            # Dockerfile for the main application (API and workers)
+├── Dockerfile.redis      # Dockerfile for custom Redis image (if used)
+├── redis.conf            # Custom Redis configuration
 ├── requirements.txt    # Python dependencies
-├── Dockerfile.redis    # Redis configuration
 └── README.md          # Project documentation
 ```
 
@@ -64,280 +76,97 @@ distributed-task-queue/
 ### Prerequisites
 - Python 3.9+
 - Docker and Docker Compose
-- Redis 7.2+
-- Prometheus and Grafana (for monitoring)
 
-### Redis Setup
+### Running the System
 
-1. Build the Redis Docker image:
-   ```bash
-   docker build -t distributed-task-queue-redis -f Dockerfile.redis .
-   ```
+1.  **Clone the repository (if you haven't already):**
+    ```bash
+    git clone <repository-url>
+    cd distributed-task-queue
+    ```
 
-2. Run the Redis container:
-   ```bash
-   docker run -d \
-     --name task-queue-redis \
-     -p 6379:6379 \
-     -v redis-data:/redis/data \
-     distributed-task-queue-redis
-   ```
-
-### System Setup
-
-1. Install Python dependencies:
+2.  **Install Python dependencies (optional, if running outside Docker for development):**
    ```bash
    pip install -r requirements.txt
    ```
 
-2. Start the entire stack:
+3.  **Build and start the services using Docker Compose:**
+    This command will build the necessary Docker images (if not already built) and start the API, workers, Redis, Prometheus, and Grafana containers.
    ```bash
    docker-compose up -d
+    ```
+    To scale the number of workers (e.g., to 3 workers):
+    ```bash
+    docker-compose up -d --build --scale worker=3
    ```
 
 ## Usage
 
-### Using the API
+### API Endpoints
 
-1. Submit a task:
+The API server runs on `http://localhost:8000` by default (as per `docker-compose.yml`).
+
+-   **Submit a Task:**
    ```bash
-   curl -X POST "http://localhost:8000/tasks/" -H "Content-Type: application/json" -d '{"task_type": "fibonacci", "payload": {"n": 10}, "priority": 1, "max_retries": 3}'
+   curl -X POST "http://localhost:8000/tasks/" \
+         -H "Content-Type: application/json" \
+         -d '{"task_type": "matrix_multiply", "payload": {"size": 10}, "priority": 1, "max_retries": 3}'
    ```
+    *(Example payload; actual task types and payloads depend on `app/workers/task_handlers.py`)*
 
-2. Check task status:
+-   **Check Task Status (Example - actual endpoint might vary):**
    ```bash
    curl "http://localhost:8000/tasks/{task_id}"
    ```
 
-3. Get queue statistics:
-   ```bash
-   curl "http://localhost:8000/tasks/stats"
-   ```
+-   **View API Documentation (Swagger UI):**
+    Open `http://localhost:8000/docs` in your browser.
 
-## Scalability Features
+### Monitoring
 
-### Circuit Breaker
-- Prevents cascading failures
-- Automatic recovery mechanism
-- Configurable failure thresholds
-- Three states: CLOSED, OPEN, HALF-OPEN
-
-### Back Pressure
-- Prevents system overload
-- Adaptive request throttling
-- Resource-aware delay calculation
-- Configurable thresholds
-
-### Partition Tolerance
-- Network partition detection
-- Automatic recovery
-- Split-brain prevention
-- Node health monitoring
-
-## Monitoring and Metrics
-
-### Accessing Monitoring Tools
-
-1. **Grafana Dashboard**
-   - URL: `http://localhost:3000`
-   - Default credentials:
-     - Username: `admin`
-     - Password: `admin`
-   - Available dashboards:
-     - Task Queue Overview
-     - Worker Performance
-     - System Resources
-     - Redis Metrics
-
-2. **Prometheus Metrics**
-   - URL: `http://localhost:9090`
-   - Direct metrics endpoint: `http://localhost:8000/metrics`
-   - Key metrics available:
-     ```
-     # Task queue metrics
-     task_total{status="completed"}
-     task_total{status="failed"}
-     queue_size
-     
-     # Worker metrics
-     worker_load
-     active_workers
-     task_processing_seconds
-     
-     # System metrics
-     memory_usage_bytes
-     cpu_usage_percent
-     ```
-
-3. **Health Check Endpoints**
-   ```bash
-   # API health status
-   curl http://localhost:8000/health
-   
-   # Redis connection status
-   docker exec task-queue-redis redis-cli ping
-   
-   # Worker status
-   curl http://localhost:8000/workers/status
-   ```
-
-### Monitoring Dashboard Guide
-
-1. **Task Queue Overview Dashboard**
-   - Real-time queue size
-   - Task processing rate
-   - Error rates
-   - Average processing time
-   
-   To access:
-   1. Open Grafana (`http://localhost:3000`)
-   2. Navigate to Dashboards → Task Queue
-   3. Select time range (default: last 1 hour)
-
-2. **Worker Performance Dashboard**
-   - Active worker count
-   - Worker load distribution
-   - Task processing latency
-   - Error distribution
-   
-   To access:
-   1. Open Grafana
-   2. Navigate to Dashboards → Worker Performance
-   3. Filter by worker ID or time range
-
-3. **System Resources Dashboard**
-   - CPU usage per worker
-   - Memory consumption
-   - Network I/O
-   - Redis memory usage
-   
-   To access:
-   1. Open Grafana
-   2. Navigate to Dashboards → System Resources
-   3. View overall or per-component metrics
-
-### Setting Up Alerts
-
-1. **Grafana Alerts**
-   1. Navigate to Alerting in Grafana
-   2. Click "New Alert Rule"
-   3. Configure conditions, e.g.:
-      ```yaml
-      - Alert: HighQueueSize
-        Condition: queue_size > 1000
-        Duration: 5m
-      
-      - Alert: WorkerOverload
-        Condition: worker_load > 0.8
-        Duration: 2m
-      ```
-
-2. **Email Notifications**
-   ```yaml
-   # In Grafana UI:
-   1. Configure → Notification channels
-   2. Add Email channel
-   3. Set email server settings
-   4. Test notification
-   ```
-
-### Metrics Collection
-
-1. **System Metrics**
-   - Collected every 5 seconds
-   - Stored in Prometheus
-   - Retention period: 15 days
-   - Access via API:
-     ```bash
-     # Get current metrics
-     curl http://localhost:8000/metrics
-     
-     # Get historical metrics
-     curl http://localhost:8000/metrics/history?hours=24
-     ```
-
-2. **Custom Metrics**
-   - Task success rate
-   - Queue growth rate
-   - Worker efficiency
-   - Access via API:
-     ```bash
-     # Get task processing statistics
-     curl http://localhost:8000/metrics/tasks
-     
-     # Get worker statistics
-     curl http://localhost:8000/metrics/workers
-     ```
-
-### Troubleshooting Metrics
-
-1. **Missing Data**
-   ```bash
-   # Check Prometheus targets
-   curl http://localhost:9090/targets
-   
-   # Check metrics endpoint
-   curl http://localhost:8000/metrics
-   ```
-
-2. **Grafana Issues**
-   ```bash
-   # Verify Prometheus data source
-   curl http://localhost:9090/-/healthy
-   
-   # Check Grafana logs
-   docker-compose logs grafana
-   ```
-
-3. **Redis Metrics**
-   ```bash
-   # Check Redis info
-   docker exec task-queue-redis redis-cli info
-   
-   # Monitor Redis in real-time
-   docker exec task-queue-redis redis-cli monitor
-   ```
-
-### Exporting Metrics
-
-1. **CSV Export**
-   - Via Grafana:
-     1. Open desired dashboard
-     2. Click panel title → More → Export CSV
-   - Via API:
-     ```bash
-     curl http://localhost:8000/metrics/export?format=csv > metrics.csv
-     ```
-
-2. **JSON Export**
-   ```bash
-   # Export all metrics
-   curl http://localhost:8000/metrics/export?format=json > metrics.json
-   
-   # Export specific time range
-   curl "http://localhost:8000/metrics/export?format=json&start=$(date -d '24 hours ago' +%s)&end=$(date +%s)" > last_24h_metrics.json
-   ```
+-   **Prometheus:**
+    -   Access the Prometheus UI at `http://localhost:9090`.
+    -   Metrics from the API and workers are exposed at their respective `/metrics` endpoints (e.g., `http://localhost:8000/metrics`).
+-   **Grafana:**
+    -   Access Grafana at `http://localhost:3000`.
+    -   Default credentials are typically `admin` / `admin`.
+    -   A pre-configured dashboard for task queue metrics should be available under `monitoring/grafana/dashboards/`.
 
 ## Load Testing and Experiments
 
-### Running Experiments
-```bash
-python -m experiments.run_experiments
-```
+The `experiments/` directory contains Python scripts to simulate load and measure system performance under various conditions.
 
-### Available Test Scenarios
-- Baseline performance
-- High load conditions
-- Stress testing
-- Network partition scenarios
-- Recovery testing
+-   **Running Experiments:**
+    Navigate to the `experiments` directory and run the desired script. For example, to run the worker scaling experiment:
+    ```bash
+    python experiments/worker_scaling_experiment.py
+    ```
+    The main script to run all experiments might be:
+    ```bash
+    python experiments/run_experiments.py
+    ```
+    Refer to the individual experiment scripts for specific configurations. Results are typically saved in the `experiment_results/` directory.
 
-### Metrics Collected
-- Request latency (avg, p95, p99)
-- Throughput (requests/second)
-- Error rates
-- Resource utilization
-- Queue growth rates
+-   **Available Experiments:**
+    -   `worker_scaling_experiment.py`: Tests system performance with varying numbers of worker instances.
+    -   `baseline_experiment.py`: Establishes baseline performance metrics.
+    -   `high_load_experiment.py`: Simulates high load scenarios.
+    -   `stress_test_experiment.py`: Pushes the system to its limits to identify bottlenecks.
+
+## For the Thesis
+
+This project aims to:
+-   Demonstrate an understanding of distributed system principles.
+-   Provide a platform for experimenting with scalability and fault-tolerance techniques.
+-   Showcase the ability to integrate monitoring tools for system analysis.
+-   The results from the `experiments/` can be used to analyze and discuss the system's behavior, scalability, and limitations.
+
+## Future Work & Potential Enhancements
+-   More sophisticated error handling and dead-letter queue implementation.
+-   Advanced task prioritization strategies.
+-   Implementation of leader election for workers or specific roles.
+-   More comprehensive security measures.
+-   Dynamic resource allocation based on queue length or processing times.
 
 ## Contributing
 

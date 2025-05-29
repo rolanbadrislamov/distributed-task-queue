@@ -617,7 +617,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "expr": "rate(completed_tasks_total[1m])",
-          "legendFormat": "Tasks/sec",
+          "legendFormat": "{{instance}}",
           "refId": "A"
         }
       ]
