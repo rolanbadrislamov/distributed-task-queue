@@ -74,8 +74,8 @@ class TaskQueue:
 
     async def enqueue_task(self, task: Task) -> str:
         task_data = task.model_dump_json()
-        score = datetime.utcnow().timestamp() + (task.priority.value * 1000)
-        
+        # Use priority as the primary sort key, and timestamp as a tiebreaker (FIFO within priority)
+        score = (task.priority.value * 1e10) - datetime.utcnow().timestamp()
         try:
             task_id = await self.redis.eval(
                 self._enqueue_lua,
