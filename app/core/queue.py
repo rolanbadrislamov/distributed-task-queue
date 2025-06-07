@@ -97,7 +97,7 @@ class TaskQueue:
 
     # Atomic Lua script for dequeueing and marking in-progress
     _dequeue_lua = """
-    local task_id = redis.call('zpopmin', KEYS[1])
+    local task_id = redis.call('zpopmax', KEYS[1])
     if not task_id[1] then return nil end
     
     local task_data = redis.call('hget', KEYS[3], task_id[1])
