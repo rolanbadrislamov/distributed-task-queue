@@ -10,7 +10,7 @@ import concurrent.futures
 from typing import Dict, Callable, Any, Coroutine
 from datetime import datetime
 from fastapi import FastAPI
-from prometheus_client import generate_latest, CONTENT_TYPE_LATEST, Counter, Gauge, REGISTRY, CollectorRegistry
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST, Counter, Gauge, REGISTRY, CollectorRegistry, Histogram
 from fastapi.responses import Response
 
 from app.core.queue import TaskQueue
@@ -31,6 +31,12 @@ WORKER_CPU_USAGE = Gauge('worker_cpu_usage_percent', 'Worker CPU usage percentag
 WORKER_MEMORY_USAGE = Gauge('worker_memory_usage_bytes', 'Worker memory usage in bytes', registry=REGISTRY)
 COMPLETED_TASKS_COUNTER = Counter('completed_tasks_total', 'Total number of completed tasks', registry=REGISTRY)
 WORKER_OBJECT_COMPLETED_TASKS = Gauge('worker_object_completed_tasks', 'Gauge: Total tasks completed by the worker object instance', registry=REGISTRY)
+TASK_PROCESSING_TIME = Histogram(
+    'task_processing_seconds',
+    'Time spent processing a task',
+    buckets=(0.01, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10),
+    registry=REGISTRY
+)
 
 class Worker:
     def __init__(self, queue: TaskQueue):
@@ -98,8 +104,10 @@ class Worker:
             return
 
         try:
-            # CPU overload check is now part of the main run loop to prevent fetching new tasks
+            start_time = time.time()
             result = await handler(task.payload)
+            duration = time.time() - start_time
+            TASK_PROCESSING_TIME.observe(duration)
             await self.queue.complete_task(task.id, result)
             TASKS_PROCESSED.inc()
             COMPLETED_TASKS_COUNTER.inc()
