@@ -12,7 +12,6 @@ logger = logging.getLogger(__name__)
 TASK_COUNTER = Counter('task_total', 'Total number of tasks processed')
 QUEUE_SIZE = Gauge('queue_size', 'Current size of the task queue')
 WORKER_LOAD = Gauge('worker_load', 'Current worker CPU load')
-TASK_PROCESSING_TIME = Histogram('task_processing_seconds', 'Time spent processing tasks')
 MEMORY_USAGE = Gauge('memory_usage_bytes', 'Current memory usage')
 ACTIVE_WORKERS = Gauge('active_workers', 'Number of active workers')
 

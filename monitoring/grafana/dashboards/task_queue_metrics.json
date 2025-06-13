@@ -346,7 +346,8 @@
                 "value": null
               }
             ]
-          }
+          },
+          "unit": "s"
         },
         "overrides": []
       },
@@ -376,11 +377,12 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "tasks_in_progress",
+          "expr": "histogram_quantile(0.95, sum(rate(task_processing_seconds_bucket[5m])) by (le))",
+          "legendFormat": "P95",
           "refId": "A"
         }
       ],
-      "title": "Tasks in Progress",
+      "title": "Task Processing Latency P95",
       "type": "timeseries"
     },
     {
@@ -432,7 +434,8 @@
                 "value": null
               }
             ]
-          }
+          },
+          "unit": "s"
         },
         "overrides": []
       },
@@ -445,8 +448,8 @@
       "id": 6,
       "options": {
         "legend": {
-          "calcs": ["total"],
-          "displayMode": "table",
+          "calcs": [],
+          "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
@@ -462,21 +465,12 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "rate(tasks_processed_total[5m])",
-          "legendFormat": "Processed",
+          "expr": "histogram_quantile(0.99, sum(rate(task_processing_seconds_bucket[5m])) by (le))",
+          "legendFormat": "P99",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "expr": "rate(tasks_failed_total[5m])",
-          "legendFormat": "Failed",
-          "refId": "B"
         }
       ],
-      "title": "Task Processing Rate (per second)",
+      "title": "Task Processing Latency P99",
       "type": "timeseries"
     },
     {
