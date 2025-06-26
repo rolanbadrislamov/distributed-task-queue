@@ -10,7 +10,7 @@ A high-performance, scalable distributed task queue system built with FastAPI, R
 - **Back Pressure Control**: Adaptive throttling based on system load and queue size
 - **Monitoring**: Prometheus metrics with Grafana dashboards for real-time insights
 - **Health Checks**: Built-in health endpoints for service monitoring
-- **Worker Auto-scaling**: Dynamic worker scaling capabilities
+- **Worker Scaling**: Worker scaling capabilities
 
 ## Architecture
 
@@ -31,40 +31,18 @@ graph LR
    ```bash
    git clone https://github.com/rolanbadrislamov/distributed-task-queue
    cd distributed-task-queue
-   docker-compose up -d
+   docker-compose up -d --scale worker=5
    ```
 
 2. **Scale workers (optional):**
    ```bash
-   docker-compose up -d --scale worker=5
+   docker-compose up -d --scale worker={number_of_workers}
    ```
 
 3. **Access services:**
    - API: http://localhost:8000
    - Prometheus: http://localhost:9090
    - Grafana: http://localhost:3000 (admin/admin credentials)
-
-### Manual Setup
-
-1. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-2. **Start Redis:**
-   ```bash
-   redis-server
-   ```
-
-3. **Run API server:**
-   ```bash
-   uvicorn app.main:app --host 0.0.0.0 --port 8000
-   ```
-
-4. **Run workers:**
-   ```bash
-   python -m app.workers.worker
-   ```
 
 ## API Usage
 
@@ -100,14 +78,6 @@ The system supports three built-in task types:
 
 Add custom handlers in `app/workers/task_handlers.py`.
 
-## Monitoring
-
-### Metrics Available
-- Queue size and processing rates
-- Worker CPU/memory usage
-- Task completion/failure rates
-- Dead letter queue statistics
-- Active worker count
 
 ### Endpoints
 - `/metrics` - Prometheus metrics
@@ -135,7 +105,6 @@ docker-compose ps
 - **Retry Logic**: Failed tasks automatically retry with exponential backoff
 - **Dead Letter Queue**: Permanently failed tasks for manual inspection
 - **Circuit Breaker**: Prevents cascade failures in overloaded systems
-- **Graceful Shutdown**: Workers complete current tasks before stopping
 
 ## Performance Testing
 
@@ -188,7 +157,3 @@ monitoring/        # Grafana dashboards and configurations
    ```python
    worker.register_task_handler('custom_task', custom_handler)
    ```
-
-## License
-
-MIT License - see LICENSE file for details.
