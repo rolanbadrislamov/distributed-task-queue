@@ -5,7 +5,6 @@ from prometheus_client import Counter, CollectorRegistry
 from app.core.queue import TaskQueue
 from app.api.router import create_api_router, configure_dependencies
 
-# Initialize Prometheus metrics with a new registry
 REGISTRY = CollectorRegistry()
 REQUESTS = Counter('http_requests_total', 'Total HTTP requests', registry=REGISTRY)
 
@@ -24,13 +23,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Create global task queue instance
 task_queue = TaskQueue()
 
 @app.on_event("startup")
 async def startup_event():
     await task_queue.connect()
-    # Configure dependencies for API routers
     configure_dependencies(task_queue)
 
 @app.on_event("shutdown")
@@ -43,7 +40,6 @@ async def count_requests(request, call_next):
     response = await call_next(request)
     return response
 
-# Include the API router
 api_router = create_api_router()
 app.include_router(api_router)
 

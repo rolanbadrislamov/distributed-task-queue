@@ -213,9 +213,8 @@ class FaultToleranceExperiment:
         # Submit tasks that will fail initially but succeed on retry
         task_ids = []
         for i in range(15):
-            # Create a task that will fail initially
             task = Task(
-                task_type="sleep",  # Use sleep handler which is more reliable
+                task_type="sleep",
                 payload={"duration": 1},
                 priority=TaskPriority.HIGH,
                 max_retries=3
@@ -262,10 +261,9 @@ class FaultToleranceExperiment:
         stats = await self.wait_for_task_completion(task_ids, timeout=300)
         
         duration = time.time() - start_time
-        success = stats["completed"] >= len(task_ids) * 0.8  # 80% success rate
+        success = stats["completed"] >= len(task_ids) * 0.8
         error_rate = stats["failed"] / len(task_ids) if task_ids else 0
         
-        # Check if back pressure was applied (queue size should stabilize)
         max_queue_size = max(queue_sizes) if queue_sizes else 0
         avg_queue_size = statistics.mean(queue_sizes) if queue_sizes else 0
         
@@ -348,21 +346,20 @@ class FaultToleranceExperiment:
         # Wait for shutdown
         await asyncio.sleep(5)
         
-        # Check task status
         in_progress_count = await self.queue.get_tasks_in_progress_count()
         
         duration = time.time() - start_time
-        success = in_progress_count == 0  # No tasks should be stuck in progress
-        error_rate = 0  # Not applicable for this test
+        success = in_progress_count == 0
+        error_rate = 0
         
         return FaultToleranceTestResult(
             test_name="Graceful Shutdown",
             success=success,
             duration=duration,
             tasks_submitted=len(task_ids),
-            tasks_completed=0,  # Not measured in this test
-            tasks_failed=0,     # Not measured in this test
-            tasks_retried=0,    # Not measured in this test
+            tasks_completed=0,
+            tasks_failed=0,
+            tasks_retried=0,
             error_rate=error_rate,
             details={"tasks_in_progress_after_shutdown": in_progress_count}
         )

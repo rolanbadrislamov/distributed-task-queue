@@ -1,21 +1,13 @@
-# Use the official Redis image as the base image
 FROM redis:7.2-alpine
 
-
-# Create a directory for Redis data and configuration
 RUN mkdir -p /redis/data /redis/conf
 
-# Copy custom Redis configuration
 COPY redis.conf /redis/conf/redis.conf
 
-# Set proper permissions
 RUN chown -R redis:redis /redis
 
-# Redis port
 EXPOSE 6379
 
-# Set the working directory
 WORKDIR /redis
 
-# Use custom Redis configuration
 CMD ["redis-server", "/redis/conf/redis.conf"] 

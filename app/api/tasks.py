@@ -5,12 +5,10 @@ from prometheus_client import Counter
 from app.core.queue import TaskQueue
 from app.models.task import Task, TaskCreate, TaskResult
 
-# Prometheus metrics for tasks
 TASKS_CREATED = Counter('tasks_created_total', 'Total tasks created')
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
-# This will be injected as dependency
 task_queue: TaskQueue = None
 
 def set_task_queue(queue: TaskQueue):
