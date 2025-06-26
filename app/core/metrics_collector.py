@@ -3,7 +3,7 @@ import psutil
 import asyncio
 from typing import Dict, List
 import logging
-from prometheus_client import Counter, Gauge, Histogram
+from prometheus_client import Counter, Gauge
 import aioredis
 
 logger = logging.getLogger(__name__)
@@ -65,11 +65,10 @@ class MetricsCollector:
         active_workers = await self.redis.scard("active_workers")
         processing_tasks = await self.redis.scard("processing_tasks")
         
-        # Calculate task throughput
         current_time = time.time()
         completed_tasks = await self.redis.zcount(
             "completed_tasks",
-            current_time - 60,  # Last minute
+            current_time - 60,
             current_time
         )
 
@@ -102,7 +101,6 @@ class MetricsCollector:
         """Store metrics history"""
         self.metrics_history.append(metrics)
         
-        # Maintain history size limit
         if len(self.metrics_history) > self.max_history_size:
             self.metrics_history = self.metrics_history[-self.max_history_size:]
 
@@ -113,7 +111,6 @@ class MetricsCollector:
 
         latest = self.metrics_history[-1]
         
-        # Calculate averages over the last minute
         minute_ago = time.time() - 60
         recent_metrics = [m for m in self.metrics_history 
                          if m["timestamp"] > minute_ago]

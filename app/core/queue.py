@@ -74,7 +74,6 @@ class TaskQueue:
 
     async def enqueue_task(self, task: Task) -> str:
         task_data = task.model_dump_json()
-        # Use priority as the primary sort key, and timestamp as a tiebreaker (FIFO within priority)
         score = (task.priority.value * 1e10) - datetime.utcnow().timestamp()
         try:
             task_id = await self.redis.eval(
@@ -89,7 +88,6 @@ class TaskQueue:
             return task_id
         except aioredis.exceptions.ResponseError as e:
             logger.error(f"Lua script error or Redis connection issue during enqueue: {str(e)}")
-            # Fallback or re-raise, depending on desired error handling
             raise
         except Exception as e:
             logger.error(f"Error enqueuing task: {str(e)}")
@@ -113,8 +111,6 @@ class TaskQueue:
 
     async def dequeue_task(self) -> Optional[Task]:
         try:
-            # EVALSHA can be used if the script is loaded once with SCRIPT LOAD
-            # For simplicity, using EVAL directly here.
             result = await self.redis.eval(
                 self._dequeue_lua, 
                 3, 
@@ -126,15 +122,14 @@ class TaskQueue:
                 return None
             
             task_id, task_data_str = result
-            if not task_data_str: # Should be caught by Lua, but as a safeguard
+            if not task_data_str:
                 logger.warning(f"Dequeued task ID {task_id} but no data found in storage.")
-                await self.redis.srem(self.tasks_in_progress_key, task_id) # Clean up
+                await self.redis.srem(self.tasks_in_progress_key, task_id)
                 return None
 
             task = Task.model_validate_json(task_data_str)
             return task
         except aioredis.exceptions.ResponseError as e:
-            # Handle potential script errors or connection issues
             logger.error(f"Lua script error or Redis connection issue during dequeue: {str(e)}")
             return None
         except Exception as e:
@@ -162,7 +157,6 @@ class TaskQueue:
         return task
 
     async def fail_task(self, task_id: str, error: str):
-        # Remove task from in-progress set
         await self.redis.srem(self.tasks_in_progress_key, task_id)
         
         task_data = await self.redis.hget(self.task_storage_key, task_id)
@@ -175,11 +169,9 @@ class TaskQueue:
         if task.retry_count >= task.max_retries:
             task.status = TaskStatus.FAILED
             task.error = error
-            # Move to dead letter queue
             await self.redis.zadd(self.dead_letter_queue_key, {task_id: datetime.utcnow().timestamp()})
         else:
             task.status = TaskStatus.RETRY
-            # Requeue with backoff
             backoff = 2 ** task.retry_count
             score = datetime.utcnow().timestamp() + backoff
             await self.redis.zadd(self.task_queue_key, {task_id: score})

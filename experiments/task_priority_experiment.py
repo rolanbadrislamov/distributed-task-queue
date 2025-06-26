@@ -91,15 +91,12 @@ class TaskPriorityExperiment:
     def save_results(self, tasks_info: List[Dict]):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         base_filename = f"{self.results_dir}/task_priority_{timestamp}"
-        # Save detailed JSON
         with open(f"{base_filename}.json", "w") as f:
             json.dump(tasks_info, f, indent=2)
-        # Save CSV
         with open(f"{base_filename}.csv", "w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=tasks_info[0].keys())
             writer.writeheader()
             writer.writerows(tasks_info)
-        # Plot and save image
         self.plot_results(tasks_info, base_filename)
 
     def print_summary(self, tasks_info: List[Dict]):

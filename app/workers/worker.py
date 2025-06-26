@@ -1,29 +1,24 @@
 import asyncio
 import logging
 import signal
-import sys
 import uuid
 import os
 import psutil
 import time
-import concurrent.futures
 from typing import Dict, Callable, Any, Coroutine
-from datetime import datetime
 from fastapi import FastAPI
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST, Counter, Gauge, REGISTRY, CollectorRegistry, Histogram
 from fastapi.responses import Response
 
 from app.core.queue import TaskQueue
-from app.models.task import Task, TaskStatus
+from app.models.task import Task
 from app.workers.task_handlers import fibonacci_handler, matrix_multiply_handler, sleep_handler
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize FastAPI app
 app = FastAPI()
 
-# Initialize Prometheus metrics
 REGISTRY = CollectorRegistry()
 TASKS_PROCESSED = Counter('tasks_processed_total', 'Total tasks processed', registry=REGISTRY)
 TASKS_FAILED = Counter('tasks_failed_total', 'Total tasks failed', registry=REGISTRY)
@@ -49,8 +44,8 @@ class Worker:
         self.last_task_time = time.time()
         self.consecutive_empty_polls = 0
         self.max_batch_size = 10
-        self.max_cpu_threshold = 90.0  # percent
-        self.total_completed_tasks = 0  # Track total completed tasks
+        self.max_cpu_threshold = 90.0
+        self.total_completed_tasks = 0
 
     def _setup_signal_handlers(self):
         for sig in (signal.SIGINT, signal.SIGTERM):
@@ -69,7 +64,7 @@ class Worker:
                 
                 WORKER_CPU_USAGE.set(cpu_percent)
                 WORKER_MEMORY_USAGE.set(memory_info.rss)
-                WORKER_OBJECT_COMPLETED_TASKS.set(self.total_completed_tasks) # Add this line
+                WORKER_OBJECT_COMPLETED_TASKS.set(self.total_completed_tasks)
                 
                 await asyncio.sleep(5)
             except Exception as e:
@@ -81,7 +76,7 @@ class Worker:
         while self.running:
             try:
                 await self.queue.update_worker_heartbeat(self.worker_id)
-                await asyncio.sleep(10)  # Send heartbeat every 10 seconds
+                await asyncio.sleep(10)
             except Exception as e:
                 logger.error(f"Error sending heartbeat: {str(e)}")
                 await asyncio.sleep(1)
@@ -134,14 +129,12 @@ class Worker:
             poll_interval = initial_poll_interval
             while self.running:
                 try:
-                    # Check CPU load before attempting to dequeue tasks
                     cpu_percent = self.process.cpu_percent(interval=None)
                     if cpu_percent > self.max_cpu_threshold:
                         logger.warning(f"Worker {self.worker_id} CPU high ({cpu_percent}%), pausing task fetching for 1 second.")
-                        await asyncio.sleep(1.0) # Pause before trying to fetch new tasks
-                        continue # Skip to next iteration to re-check CPU and conditions
+                        await asyncio.sleep(1.0)
+                        continue
 
-                    # Try to get a batch of tasks
                     tasks = []
                     for _ in range(self.max_batch_size):
                         task = await self.queue.dequeue_task()
@@ -151,23 +144,20 @@ class Worker:
                             break
 
                     if tasks:
-                        # Process tasks concurrently
                         await asyncio.gather(*[self.process_task(task) for task in tasks])
                         self.consecutive_empty_polls = 0
                         self.last_task_time = time.time()
                         poll_interval = initial_poll_interval
                     else:
-                        # Adaptive polling interval
                         self.consecutive_empty_polls += 1
                         if self.consecutive_empty_polls > 5:
-                            poll_interval = min(poll_interval * 1.5, 5.0)  # Max 5 second interval
+                            poll_interval = min(poll_interval * 1.5, 5.0)
                         await asyncio.sleep(poll_interval)
 
                 except Exception as e:
                     logger.error(f"Error in worker loop: {str(e)}")
                     await asyncio.sleep(poll_interval)
         finally:
-            # Clean up
             heartbeat_task.cancel()
             metrics_task.cancel()
             try:
@@ -188,7 +178,6 @@ async def health():
     """Health check endpoint"""
     return {"status": "healthy"}
 
-# Create global worker instance
 worker = None
 
 @app.on_event("startup")

@@ -1,6 +1,6 @@
 import asyncio
 import time
-from typing import List, Set, Optional
+from typing import Set
 import logging
 from enum import Enum
 import aioredis
@@ -74,10 +74,8 @@ class PartitionHandler:
         current_time = time.time()
         heartbeats = await self.redis.hgetall("node_heartbeats")
         
-        # Convert bytes to str
         heartbeats = {k.decode(): float(v.decode()) for k, v in heartbeats.items()}
         
-        # Update known nodes
         self.known_nodes.update(heartbeats.keys())
         
         for node_id in self.known_nodes:

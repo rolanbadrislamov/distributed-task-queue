@@ -15,17 +15,14 @@ async def fibonacci_handler(payload):
 
 
 async def matrix_multiply_handler(payload):
-    size = payload.get('size', 10) # Default to 10x10 if not specified
+    size = payload.get('size', 10)
     if not isinstance(size, int) or size <= 0:
         raise ValueError('Matrix size must be a positive integer')
 
-    # Generate two random matrices of the given size
-    # For simplicity, using random integers between 0 and 9
-    # In a real scenario, these might come from a more complex source or be floats.
     A = [[random.randint(0, 9) for _ in range(size)] for _ in range(size)]
     B = [[random.randint(0, 9) for _ in range(size)] for _ in range(size)]
 
-    if not A or not B: # Should not happen with current generation logic
+    if not A or not B:
         raise ValueError('Failed to generate matrices A or B')
         
     def matmul(A, B):

@@ -47,11 +47,9 @@ class WorkerScalingExperiment:
         worker_count: int
     ) -> Dict:
         """Run a load test with specified parameters"""
-        # First scale the workers
         if not await self.scale_workers(worker_count):
             raise Exception(f"Failed to scale to {worker_count} workers")
 
-        # Get initial metrics from all workers
         initial_metrics = await self._get_all_worker_metrics()
         initial_completed_tasks = sum(
             self._extract_metric_value(metrics, 'tasks_processed_total') or 0 
@@ -71,7 +69,6 @@ class WorkerScalingExperiment:
 
             await asyncio.gather(*tasks)
 
-        # Get final metrics from all workers
         final_metrics = await self._get_all_worker_metrics()
         final_completed_tasks = sum(
             self._extract_metric_value(metrics, 'tasks_processed_total') or 0 
@@ -95,7 +92,6 @@ class WorkerScalingExperiment:
         """Get metrics from all worker instances"""
         metrics = {}
         async with aiohttp.ClientSession() as session:
-            # Get API metrics
             try:
                 async with session.get(f"{self.base_url}/metrics") as response:
                     if response.status == 200:
@@ -105,7 +101,6 @@ class WorkerScalingExperiment:
             except Exception as e:
                 logger.error(f"Failed to get API metrics: {e}")
 
-            # Get a list of worker ports using docker-compose ps
             try:
                 result = subprocess.run(
                     ["docker", "ps", "--format", "{{.Names}}\t{{.Ports}}"],
@@ -114,18 +109,15 @@ class WorkerScalingExperiment:
                     check=True
                 )
                 
-                # Parse the output to get worker container information
                 for line in result.stdout.splitlines():
                     if not line.strip():
                         continue
                     try:
                         name, ports = line.split('\t')
                         if 'worker' in name:
-                            # Extract the host port from the port mapping (e.g., 0.0.0.0:50891->8000/tcp)
-                            port_match = ports.split(',')[0]  # Get first port mapping if multiple
+                            port_match = ports.split(',')[0]
                             host_port = port_match.split(':')[1].split('->')[0]
                             
-                            # Get metrics from the worker
                             try:
                                 worker_url = f"http://localhost:{host_port}/metrics"
                                 async with session.get(worker_url) as response:
@@ -160,7 +152,7 @@ class WorkerScalingExperiment:
                 response = await self._submit_matrix_task(session)
                 response_data = await response.json()
                 submitted_tasks.append({
-                    "task_id": response_data.get("id"),  # Changed from task_id to id to match API response
+                    "task_id": response_data.get("id"),
                     "submit_time": start_request,
                     "status": response.status
                 })
@@ -231,7 +223,6 @@ class WorkerScalingExperiment:
         successful_submissions = len([t for t in submitted_tasks if 200 <= t["status"] < 300])
         failed_submissions = len(submitted_tasks) - successful_submissions
 
-        # Log detailed metrics
         logger.info(f"Tasks completed per worker: {json.dumps(tasks_per_worker, indent=2)}")
         logger.info(f"Total tasks submitted: {len(submitted_tasks)}")
         logger.info(f"Successful submissions: {successful_submissions}")
@@ -259,17 +250,14 @@ class WorkerScalingExperiment:
         completion_rates = [r["tasks_completed_per_second"] for r in all_results]
         completion_percentages = [r["task_completion_rate"] * 100 for r in all_results]
 
-        # Create a figure with two subplots
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10))
 
-        # Plot task completion rate
         ax1.plot(worker_counts, completion_rates, 'bo-')
         ax1.set_xlabel('Number of Workers')
         ax1.set_ylabel('Tasks Completed per Second')
         ax1.set_title('Task Processing Rate vs Number of Workers')
         ax1.grid(True)
 
-        # Plot completion percentage
         ax2.plot(worker_counts, completion_percentages, 'ro-')
         ax2.set_xlabel('Number of Workers')
         ax2.set_ylabel('Task Completion Percentage')
@@ -289,24 +277,21 @@ class WorkerScalingExperiment:
         with open(f"{base_filename}.json", "w") as f:
             json.dump(results, f, indent=2)
 
-        # Save CSV summary
         if results:
             with open(f"{base_filename}.csv", "w", newline="") as f:
                 writer = csv.DictWriter(f, fieldnames=results[0].keys())
                 writer.writeheader()
                 writer.writerows(results)
 
-        # Generate plots
         self.plot_results(results, f"{base_filename}_plot.png")
 
 
 async def main():
-    # Worker scaling experiment configuration
     experiment_config = {
         "name": "worker_scaling",
-        "users": 50,  # Moderate number of concurrent users
-        "duration": 20,  # 1 minute per test
-        "worker_counts": [3, 4, 8]  # Test with different numbers of workers
+        "users": 50,
+        "duration": 180,
+        "worker_counts": [3, 4, 8]
     }
 
     runner = WorkerScalingExperiment()
