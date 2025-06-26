@@ -15,30 +15,12 @@ A high-performance, scalable distributed task queue system built with FastAPI, R
 ## Architecture
 
 ```mermaid
-graph TD
-    A[Client Application] --> B[FastAPI Server]
-    B --> C[Redis Queue]
-    B --> D[Task Storage & Monitoring]
-    C --> E[Workers<br/>Scalable]
-    E --> D
-    D --> C
-    
-    subgraph "Core Components"
-        B
-        C
-        E
-        D
-    end
-    
-    subgraph "Monitoring Stack"
-        F[Prometheus]
-        G[Grafana]
-        H[Health Checks]
-    end
-    
-    D --> F
-    F --> G
-    B --> H
+graph LR
+    A[Client<br/>Application] --> B[FastAPI<br/>Server]
+    B --> C[Redis<br/>Queue]
+    B --> D[Workers<br/>Scalable]
+    D --> E[Task Storage<br/>& Monitoring]
+    E --> C
 ```
 
 ## Quick Start
