@@ -33,7 +33,7 @@ A high-performance, scalable distributed task queue system built with FastAPI, R
 
 1. **Clone and start the system:**
    ```bash
-   git clone [<repository-url>](https://github.com/rolanbadrislamov/distributed-task-queue)
+   git clone https://github.com/rolanbadrislamov/distributed-task-queue
    cd distributed-task-queue
    docker-compose up -d
    ```
