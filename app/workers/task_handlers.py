@@ -21,7 +21,6 @@ async def matrix_multiply_handler(payload):
 
     # Generate two random matrices of the given size
     # For simplicity, using random integers between 0 and 9
-    # In a real scenario, these might come from a more complex source or be floats.
     A = [[random.randint(0, 9) for _ in range(size)] for _ in range(size)]
     B = [[random.randint(0, 9) for _ in range(size)] for _ in range(size)]
 
