@@ -129,8 +129,8 @@ async def main():
     # Stress test experiment configuration with increased load
     experiment = {
         "name": "stress_test",
-        "users": 500,  # Increased from 200 to 500 concurrent users
-        "duration": 120,  # Increased from 60 to 120 seconds for better data
+        "users": 500,
+        "duration": 180, 
         "pattern": "matrix"
     }
 

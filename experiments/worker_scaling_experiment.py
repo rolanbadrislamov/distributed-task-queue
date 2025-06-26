@@ -160,7 +160,7 @@ class WorkerScalingExperiment:
                 response = await self._submit_matrix_task(session)
                 response_data = await response.json()
                 submitted_tasks.append({
-                    "task_id": response_data.get("id"),  # Changed from task_id to id to match API response
+                    "task_id": response_data.get("id"),
                     "submit_time": start_request,
                     "status": response.status
                 })
@@ -305,7 +305,7 @@ async def main():
     experiment_config = {
         "name": "worker_scaling",
         "users": 50,  # Moderate number of concurrent users
-        "duration": 20,  # 1 minute per test
+        "duration": 180,
         "worker_counts": [3, 4, 8]  # Test with different numbers of workers
     }
 

@@ -2,22 +2,16 @@ import asyncio
 import logging
 import time
 import random
-import signal
-import sys
 import os
 import json
 import statistics
 from datetime import datetime
 from typing import List, Dict, Any, Optional
-import psutil
 import subprocess
 import docker
 from dataclasses import dataclass
 
 import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
-import numpy as np
 
 from app.core.queue import TaskQueue
 from app.models.task import Task, TaskStatus, TaskPriority
